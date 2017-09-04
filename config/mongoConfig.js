@@ -5,7 +5,7 @@ module.exports = {
         password: "a21th21"
     },
     development: {
-       url: 'ds127550-a0.mlab.com:27550,ds127550-a1.mlab.com:27550/sportimo_development?replicaSet=rs-ds127550',
+       url: 'ds153113.mlab.com:53113/grandbazaar_dev',
         user: 'bedbug',
         password: "a21th21"
     }
