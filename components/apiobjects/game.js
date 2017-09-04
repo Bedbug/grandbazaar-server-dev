@@ -105,7 +105,6 @@ api.deleteGame = function (id,cb) {
 ========= [ SPECIAL METHODS ] =========
 */
 
-
 //TEST
 //New Callback System in TEST, which returns a ResponseClass object's Output
 api.test=function (cb) {
