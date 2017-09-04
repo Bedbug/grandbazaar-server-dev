@@ -50,8 +50,6 @@ var version = "0.0.1";
 var server = http.createServer(app);
 var port = (process.env.PORT || 3030)
 
-var io = require('socket.io')(server);
-
 app.listen(port, function () {
     console.log("------------------------------------------------------------------------------------");
     console.log("-------       Grand Bazaar Game Server %s listening on port %d        --------", version, port);
@@ -59,10 +57,10 @@ app.listen(port, function () {
     console.log("------------------------------------------------------------------------------------");
 });
 
-if(process.env.NODE_ENV == "development"){
-morgan.token("date-time", function (req, res) { return (new Date()).toISOString() });
-app.use(morgan(':date-time :method :url :status :response-time ms - :res[content-length]'));
-app.use(morgan('dev'));
+if (process.env.NODE_ENV == "development") {
+    morgan.token("date-time", function (req, res) { return (new Date()).toISOString() });
+    app.use(morgan(':date-time :method :url :status :response-time ms - :res[content-length]'));
+    app.use(morgan('dev'));
 }
 app.get("/crossdomain.xml", onCrossDomainHandler);
 
@@ -89,7 +87,7 @@ var mongoCreds = require('./config/mongoConfig');
 
 // try {
 //     PublishChannel = redis.createClient(process.env.REDIS_URL || "redis://h:p24268cafef1f0923a94420b8cb29eb88476356728a9825543a262bac20b0c973@ec2-34-249-251-118.eu-west-1.compute.amazonaws.com:25229");
-        
+
 //     SubscribeChannel = redis.createClient(process.env.REDIS_URL || "redis://h:p24268cafef1f0923a94420b8cb29eb88476356728a9825543a262bac20b0c973@ec2-34-249-251-118.eu-west-1.compute.amazonaws.com:25229");
 
 //     PublishChannel.on("error", function (err) {
@@ -200,11 +198,16 @@ app.use(function (error, request, response, next) {
     //return response.status(500).json({error: 'Oops! The service is experiencing some unexpected issues. Please try again later.'});
 });
 
+
+
+app.set('views', __dirname + './components/views')
+app.set('view engine', 'ejs');
+
 // Bootstrap models
 var modelsPath = path.join(__dirname, 'components/models');
 fs.readdirSync(modelsPath).forEach(function (file) {
-    if(junk.not(file))
-    require(modelsPath + '/' + file);
+    if (junk.not(file))
+        require(modelsPath + '/' + file);
 });
 
 // var routesPath = path.join(__dirname, 'components/routes');
@@ -216,20 +219,21 @@ fs.readdirSync(modelsPath).forEach(function (file) {
 // Bootstrap api
 var apiPath = path.join(__dirname, 'components/api');
 fs.readdirSync(apiPath).forEach(function (file) {
-    if(junk.not(file))
-    app.use('/', require(apiPath + '/' + file));
+    if (junk.not(file))
+        app.use('/', require(apiPath + '/' + file));
 });
-
-app.set('views', __dirname + './components/views')
-app.set('view engine', 'ejs');
-
-io.on('connection', function (socket) {
-    socket.emit('news', { hello: 'world' });
-    socket.on('my other event', function (data) {
-      console.log(data);
-    });
-  });
 
 //
 // Now that we are set, let the games begin.
 //
+// Instantiate the Game Server
+var io = require('socket.io')(server);
+
+module.exports.io = io;
+
+var gameServer = require('./modules/gameServer');
+
+
+
+
+
