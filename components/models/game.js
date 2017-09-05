@@ -15,10 +15,13 @@ l=require('../config/lib');
 var fields = {
 	dyno: { type: String },
 	roomid: { type: String },
-	players: [{ type: String, ref: 'user' }],
+	players: [{ type: String, ref: 'users' }],
+	questions: [{ type: String, ref: 'questions' }],//{type: Schema.Types.Mixed, default: []},
+	// status values: [0] pending, [1] active, [2] closed
+	status: {type: Number, default:0},
 	configuration: { type: Schema.Types.Mixed }
 };
 
 var gameSchema = new Schema(fields);
 
-module.exports = mongoose.model('game', gameSchema);
+module.exports = mongoose.model('games', gameSchema);

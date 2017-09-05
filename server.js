@@ -113,7 +113,7 @@ var mongoConnection = 'mongodb://' + mongoCreds[process.env.NODE_ENV].user + ':'
 
 mongoose.Promise = global.Promise;
 
-mongoose.connect(mongoConnection, function (err, res) {
+mongoose.connect(mongoConnection, { config: { autoIndex: process.env.NODE_ENV == "development"? true : false }}, function (err, res) {
     if (err) {
         console.log('ERROR connecting to: ' + mongoConnection + '. ' + err);
     }
@@ -136,9 +136,9 @@ app.use(function (req, res, next) {
     next();
 });
 
-app.get('/', function (req, res, next) {
-    res.send(200, "Grand Bazaar main game server status is live.");
-});
+// app.get('/', express.static(__dirname + '/docs'));
+app.use('/', express.static(__dirname + '/docs'));
+   
 
 /*  Winston Logger Configuration */
 var logger = new (winston.Logger)({

@@ -1,6 +1,6 @@
 // Module dependencies.
 var mongoose = require('mongoose'),
-Game = mongoose.models.Game,
+Game = mongoose.models.games,
 api = {},
 l=require('../config/lib');
 
@@ -63,9 +63,6 @@ api.editGame = function (id,updateData, cb) {
      return cb('No Data Found',404); 
     }
 
-    
-  
-  
     if(typeof updateData["dyno"] != 'undefined'){
       game["dyno"] = updateData["dyno"];
     }

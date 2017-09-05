@@ -11,8 +11,7 @@ var mongoose = require('mongoose'),
      * the game according to these specs.
      */
 var game_type = {
-    // solo does not uses socket rooms
-    solo: { type: Boolean },
+    name: { type: String},    
     // if not solo, this defines the room players number
     room_size: { type: Number},
     // if the game can start with less players than room size.
@@ -21,10 +20,10 @@ var game_type = {
     // holds an object of question types and the number that should be
     // requested in the whole quiz. Defaults to one each.
     quiz_questions: { type: Schema.Types.Mixed, default:{
-        "movie":1,
-        "best_of":1,
+        "true_false":1,
         "multiple":1,
-        "more_less":1
+        "how_close":1,
+        "list":1
     },
     // the cost in coins to participate
     coins_required: {type: Number},
@@ -40,5 +39,8 @@ var game_type = {
 };
 
 var game_type_schema = new Schema(game_type);
+
+// Creating indexes
+game_type_schema.index({name: 1});
 
 module.exports = mongoose.model('game_types', game_type_schema);

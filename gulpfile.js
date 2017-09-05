@@ -20,5 +20,13 @@ gulp.task('logs',function(cb){
    
 })
 
+gulp.task('docs', function(cb){
+  exec('apidoc -i components/api -o docs', function (err, stdout, stderr) {
+    console.log(stdout);
+    console.log(stderr);
+    cb(err);
+  });
+})
+
 
 
