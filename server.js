@@ -49,6 +49,8 @@ var version = "0.0.1";
 // Create Server
 var server = http.createServer(app);
 var port = (process.env.PORT || 3030)
+var io = require('socket.io')(server);
+
 
 app.listen(port, function () {
     console.log("------------------------------------------------------------------------------------");
@@ -227,12 +229,12 @@ fs.readdirSync(apiPath).forEach(function (file) {
 // Now that we are set, let the games begin.
 //
 // Instantiate the Game Server
-var io = require('socket.io')(server);
 
-module.exports.io = io;
 
-var gameServer = require('./modules/gameServer');
 
+
+// var gameServer = require('./modules/gameServer');
+// gameServer.initSocketsServer(io);
 
 
 
