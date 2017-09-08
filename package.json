@@ -36,7 +36,8 @@
     "request": "latest",
     "shortid": "^2.2.6",
     "socket.io": "^2.0.3",
-    "winston": "^2.1.1"
+    "winston": "^2.1.1",
+    "ws": "^3.1.0"
   },
   "engines": {
     "node": "6.11.1"

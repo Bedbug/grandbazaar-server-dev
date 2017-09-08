@@ -8,6 +8,20 @@ var api = {};
 
 /**
  *
+ * @api {get} GameTicket GameTicket 
+ * @apiVersion 1.0.0
+ * @apiName GameTicket
+ * @apiGroup Client
+ *
+ * @apiDescription This is an example of a GameTicket
+ * 
+ *
+ * @apiUse GameTicket
+ *    
+ */
+
+/**
+ *
  * @api {post} v1/client/ticket Request Game Ticket
  * @apiVersion 1.0.0
  * @apiName GetTicket
@@ -22,10 +36,125 @@ var api = {};
  * @apiParam {String} game_type_name The game type name of the game ticket.
  * @apiParam {String} user_id The id of the user.
  *
- * @apiSuccess {GameTicket} ticket The game ticket to be parsed by the client. 
+ * @apiUse GameTicketShort
  *
- * @apiSuccessExample Success-Response:
- *     HTTP/1.1 200 OK
+ * @apiError GameTypeNotFound Invalid data provided.
+ *
+ * @apiErrorExample Error-Response:
+ *     HTTP/1.1 500 Not Found
+ *     {
+    "status": "error",
+    "data": "Invalid data provided",
+    "message": "There was an error saving this data."
+}
+ */
+api.ticket = function (req, res) {
+
+	if (req.body.game_type == undefined || req.body.user_id == undefined ) {
+		var r = l.response(l.STATUS_ERR, 'Invalid data provided', 'There was an error saving this data.');
+		return res.status(500).json(r);
+	}
+
+	if (req.body.dyno_name == undefined) {
+		var dynoId = process.env.DYNO;
+		req.body.dyno_name = dynoId ? /\w+\.(\d+)/.exec(dynoId)[1] : "web.1";
+	}	
+	gameServer.createNewGame(req.body.user_id, req.body.game_type, req.body.dyno_name, (err, data) => {
+		var r = {}, statusCode = 500;
+
+		if (err) {
+			r = l.response(l.STATUS_ERR, null, err);
+		} else {
+			r = l.response(l.STATUS_OK, data, null);
+			statusCode = 201;
+		}
+		return res.status(statusCode).json(r);
+	});
+};
+
+/**
+ *
+ * @api {post} v1/client/ticket/:id Get open ticket
+ * @apiVersion 1.0.0
+ * @apiName GetOldTicket
+ * @apiGroup Client
+ *
+ * @apiDescription This endpoint is called when the user wants to
+ * retrieve an old ticket probably under instructions from the
+ * SocketsServer.
+ * 
+ * @apiParam {String} :id The ID of the game ticket.
+ *
+ * @apiUse GameTicketShort
+ *    
+ * @apiError GameID Invalid data provided.
+ *
+ * @apiErrorExample Error-Response:
+ *     HTTP/1.1 500 Not Found
+ *     {
+    "status": "error",
+    "data": "Invalid data provided",
+    "message": "There was an error saving this data."
+}
+ */
+
+ api.getOldticket = function (req, res) {
+
+	if (req.params.id == undefined) {
+		var r = l.response(l.STATUS_ERR, 'Invalid data provided', 'There was an error saving this data.');
+		return res.status(500).json(r);
+	}
+
+	// if (req.body.dyno_name == undefined) {
+	// 	var dynoId = process.env.DYNO;
+	// 	req.body.dyno_name = dynoId ? /\w+\.(\d+)/.exec(dynoId)[1] : "web.1";
+	// }	
+	gameServer.fetchOpenGame(req.params.id, (err, data) => {
+		var r = {}, statusCode = 500;
+
+		if (err) {
+			r = l.response(l.STATUS_ERR, null, err);
+		} else {
+			r = l.response(l.STATUS_OK, data, null);
+			statusCode = 201;
+		}
+		return res.status(statusCode).json(r);
+	});
+};
+
+
+
+/*
+=====================  ROUTES  =====================
+*/
+
+router.post('/v1/client/ticket', api.ticket);
+
+router.get('/v1/client/ticket/:id', api.getOldticket);
+
+
+module.exports = router;
+
+
+/**
+ * @apiDefine GameTicketShort
+ *
+ * @apiSuccess {GameTicket} ticket The game ticket to be parsed by the client. 
+ * 
+ *  @apiSuccessExample Success-Response:
+ *     HTTP/1.1 200 OK 
+ *     {
+ *          [GameTicket Object]
+ *     }
+*/
+
+/**
+ * @apiDefine GameTicket
+ *
+ * @apiSuccess {GameTicket} ticket The game ticket to be parsed by the client. 
+ * 
+ *  @apiSuccessExample Success-Response:
+ *     HTTP/1.1 200 OK 
  *     {
     "status": "success",
     "data": {
@@ -254,46 +383,4 @@ var api = {};
     },
     "message": null
 }
- *
- * @apiError GameTypeNotFound Invalid data provided.
- *
- * @apiErrorExample Error-Response:
- *     HTTP/1.1 500 Not Found
- *     {
-    "status": "error",
-    "data": "Invalid data provided",
-    "message": "There was an error saving this data."
-}
  */
-api.ticket = function (req, res) {
-
-	if (req.body.game_type == undefined || req.body.user_id == undefined ) {
-		var r = l.response(l.STATUS_ERR, 'Invalid data provided', 'There was an error saving this data.');
-		return res.status(500).json(r);
-	}
-
-	if (req.body.dyno_name == undefined) {
-		var dynoId = process.env.DYNO;
-		req.body.dyno_name = dynoId ? /\w+\.(\d+)/.exec(dynoId)[1] : "web.1";
-	}	
-	gameServer.createNewGame(req.body.user_id, req.body.game_type, req.body.dyno_name, (err, data) => {
-		var r = {}, statusCode = 500;
-
-		if (err) {
-			r = l.response(l.STATUS_ERR, null, err);
-		} else {
-			r = l.response(l.STATUS_OK, data, null);
-			statusCode = 201;
-		}
-		return res.status(statusCode).json(r);
-	});
-};
-
-/*
-=====================  ROUTES  =====================
-*/
-
-
-router.post('/v1/client/ticket', api.ticket);
-
-module.exports = router;

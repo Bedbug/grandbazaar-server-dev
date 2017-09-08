@@ -31,28 +31,63 @@
 
  */
 
+
+// const express = require('express');
+// const http = require('http');
+// const url = require('url');
+// const WebSocket = require('ws');
+
+// const app = express();
+
+// app.use(function (req, res) {
+//   res.send({ msg: "hello" });
+// });
+
+// const server = http.createServer(app);
+// const wss = new WebSocket.Server({ server });
+
+// wss.on('connection', function connection(ws, req) {
+//   const location = url.parse(req.url, true);
+//   // You might use location.query.access_token to authenticate or share sessions
+//   // or req.headers.cookie (see http://stackoverflow.com/a/16395220/151312)
+
+//   ws.on('message', function incoming(message) {
+//     console.log('received: %s', message);
+//   });
+
+//   ws.send('something');
+// });
+
+// server.listen(8080, function listening() {
+//   console.log('Listening on %d', server.address().port);
+// });
+
+
+
 var express = require("express"),
     http = require('http'),
     bodyParser = require('body-parser'),
-    redis = require('redis'),
+    // redis = require('redis'),
     mongoose = require('mongoose'),
     winston = require('winston'),
     morgan = require('morgan'),
     path = require('path'),
     fs = require('fs'),
-    junk = require('junk');
+    junk = require('junk'),
+    WebSocket = require('ws');
 
 
 
 var app = module.exports = exports.app = express();
 var version = "0.0.1";
-// Create Server
+// // Create Server
 var server = http.createServer(app);
 var port = (process.env.PORT || 3030)
-var io = require('socket.io')(server);
+var wss = new WebSocket.Server({ server });
+// var wss = require('socket.io')(server);
 
 
-app.listen(port, function () {
+server.listen(port, function () {
     console.log("------------------------------------------------------------------------------------");
     console.log("-------       Grand Bazaar Game Server %s listening on port %d        --------", version, port);
     console.log("-------       Environment: " + process.env.NODE_ENV);
@@ -225,16 +260,8 @@ fs.readdirSync(apiPath).forEach(function (file) {
         app.use('/', require(apiPath + '/' + file));
 });
 
-//
-// Now that we are set, let the games begin.
-//
-// Instantiate the Game Server
-
-
-
-
-// var gameServer = require('./modules/gameServer');
-// gameServer.initSocketsServer(io);
+var gameServer = require('./modules/gameServer');
+gameServer.initSocketsServer(wss);
 
 
 
