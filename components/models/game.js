@@ -3,6 +3,7 @@
 var mongoose = require('mongoose'),
 	Schema = mongoose.Schema,
 	ObjectId = Schema.ObjectId,
+	random = require('mongoose-simple-random'),
 	l = require('../config/lib');
 
 /**
@@ -27,7 +28,7 @@ var fields = {
 	playersScores: { type: Schema.Types.Mixed },
 	// If solo or tournament here is where we hold the player score
 	playerScore: { type: Number, default: 0 },
-	questions: [{ type: String, ref: 'questions' }],//{type: Schema.Types.Mixed, default: []},
+	questions: [{type: Schema.Types.Mixed}],//{type: Schema.Types.Mixed, default: []},
 	// status values: [0] pending, [1] active, [2] closed
 	status: { type: Number, default: 0 },
 	configuration: { type: Schema.Types.Mixed },
@@ -35,5 +36,7 @@ var fields = {
 };
 
 var gameSchema = new Schema(fields);
+
+gameSchema.plugin(random);
 
 module.exports = mongoose.model('games', gameSchema);

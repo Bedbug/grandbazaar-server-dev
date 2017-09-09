@@ -51,9 +51,12 @@ GameServer.createNewGame = function (user_id, game_type_name, dyno_name, cb) {
         // Populate Questions
         GameServer.populateGameQuestions,
     ], function (err, game) {
-        game.save(function (err, result) {
-            return cb(err, game);
-        })
+        if (!err)
+            game.save(function (err, result) {
+                return cb(err, game);
+            })
+        else
+            return cb(err, null)
     })
 }
 
@@ -66,8 +69,54 @@ GameServer.createNewGame = function (user_id, game_type_name, dyno_name, cb) {
  * 3. Inform the user through sockets that a user has connected feeding the bot info
  * 4. Inform the user that the other player has concluded the game
  */
-GameServer.createHead2HeadBotGame = function (game_id, callback) {
+GameServer.createHead2HeadBotGame = function (game_id) {
     console.log("Creating Head 2 Head Bot");
+    var openGame;
+    var oldGame;
+    async.waterfall([
+        // 0. Get the game in question
+        function (callback) {
+            GameServer.fetchOpenGame(game_id, function (err, game) {
+                openGame = game;
+                callback(err);
+            })
+        },
+        // 1. Get a previous head 2 head and multiplex questions and answer of one of the users
+        function (callback) {   
+            //, "players._id": { $ne: openGame.players[0]._id }
+            Game.findOneRandom({ type: "head2head" }, {}, { limit: 1 }, function (err, result) {
+                oldGame = result;
+                openGame.questions = oldGame.questions;
+                openGame.players.push(oldGame.players[Math.floor(Math.random() * oldGame.players.length)])
+                callback(err);
+            });
+        },
+        // 2. Inform the user through sockets to update the game object
+        function(callback){
+            oldGame.save(function(err,result){
+                SocketServer.socketsBroadcast(oldGame._id,{action:"Reload_Game"});
+                callback(err);
+            })
+        },
+        function(callback){
+            setTimeout(function(){
+                SocketServer.socketsBroadcast(oldGame._id,{action:"Player_Connect"});
+                callback(err);
+            },5000)
+                
+                
+            
+        },
+    ], function (err, game) {
+        // if (!err)
+        //     game.save(function (err, result) {
+        //         return cb(err, game);
+        //     })
+        // else
+        //     return cb(err, null);
+        console.log(err);
+        console.log(game);
+    })
 }
 
 /************************************************************
@@ -166,8 +215,8 @@ GameServer.populateGameQuestions = function (game, callback) {
  * Return the game by id
  */
 GameServer.fetchOpenGame = function (gameid, cb) {
-    Game.findById(gameid, function(err, game){
-         return cb(err, game);
+    Game.findById(gameid, function (err, game) {
+        return cb(err, game);
     })
 }
 
@@ -240,8 +289,12 @@ GameServer.initSocketsServer = function (wss) {
         });
 
         // SocketServer.broadcast("lobby", null, "Hello Lobby");
-        // ws.send('something');
+        // ws.csend('something');
     });
+
+    SocketServer.botSubscribe = function(){
+        
+    }
 
     SocketServer.socketsBroadcast = function (sockets, data) {
         _.each(sockets, function (socket) {
@@ -276,20 +329,20 @@ GameServer.initSocketsServer = function (wss) {
 
     SocketServer.createRoom = function (roomid, roomsize) {
         var room = { id: roomid, size: roomsize, sockets: [] };
-        console.log("Opening Room: "+room.id);
-        room.noUserConnected = function(){                        
+        console.log("Opening Room: " + room.id);
+        room.noUserConnected = function () {
             if (this.size > 0) {
-               console.log("Game failed to find live user. Let's imitate one.");
-               GameServer.createHead2HeadBotGame(this.id);
+                console.log("Game failed to find live user. Let's imitate one.");
+                GameServer.createHead2HeadBotGame(this.id);
             }
         };
         room.timer = setTimeout(room.noUserConnected.bind(room), 10000);
-        SocketServer.rooms.push(room);      
+        SocketServer.rooms.push(room);
     }
 
     SocketServer.closeRoom = function (roomid) {
         var room = SocketServer.getRoom(roomid);
-        console.log("Closing Room: "+room.id);
+        console.log("Closing Room: " + room.id);
         SocketServer.socketsBroadcast(room.sockets, { action: "Room_Closed" });
         clearTimeout(room.timer);
         _.pull(SocketServer.rooms, room);

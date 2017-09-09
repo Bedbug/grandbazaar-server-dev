@@ -59,9 +59,6 @@ api.editQuestion = function (id,updateData, cb) {
    
     //Force Error
     if(item==null) return cbf(cb,'No Data Found',404); 
-
-    
-  
   
     if(typeof updateData["type"] != 'undefined'){
       question["type"] = updateData["type"];
