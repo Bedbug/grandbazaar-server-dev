@@ -73,6 +73,7 @@ GameServer.createHead2HeadBotGame = function (game_id) {
     console.log("Creating Head 2 Head Bot");
     var openGame;
     var oldGame;
+    var oldPlayer;
     async.waterfall([
         // 0. Get the game in question
         function (callback) {
@@ -82,40 +83,42 @@ GameServer.createHead2HeadBotGame = function (game_id) {
             })
         },
         // 1. Get a previous head 2 head and multiplex questions and answer of one of the users
-        function (callback) {   
-            //, "players._id": { $ne: openGame.players[0]._id }
-            Game.findOneRandom({ type: "head2head" }, {}, { limit: 1 }, function (err, result) {
+        function (callback) {
+            // We find one random game of Head2Head which has ended and the player has not participated
+            Game.findOneRandom({ type: "head2head", status: 2, "players._id": { $ne: openGame.players[0]._id } }, {}, { limit: 1 }, function (err, result) {
+                 console.log("1. Get a previous head 2 head and multiplex questions and answer of one of the users");
                 oldGame = result;
+                // We make the additions needed to the open game from the old one
                 openGame.questions = oldGame.questions;
-                openGame.players.push(oldGame.players[Math.floor(Math.random() * oldGame.players.length)])
+                // openGame.markModified('questions');
+                // We set the OpenGame as active since now we've reached the number of players needed to begin
+                openGame.status = 1;
+                oldPlayer = oldGame.players[Math.floor(Math.random() * oldGame.players.length)];
+                openGame.players.push(oldPlayer);
+                // openGame.markModified('players');
                 callback(err);
             });
         },
         // 2. Inform the user through sockets to update the game object
-        function(callback){
-            oldGame.save(function(err,result){
-                SocketServer.socketsBroadcast(oldGame._id,{action:"Reload_Game"});
+        function (callback) {
+            console.log("2. Inform the user through sockets to update the game object");
+            openGame.save(function (err, result) {
+                // After we update the Open Game we inform the user client that it has to reload the game data because the questions have changed
+                SocketServer.roomBroadcast(openGame._id, "Reload_Game");
                 callback(err);
             })
         },
-        function(callback){
-            setTimeout(function(){
-                SocketServer.socketsBroadcast(oldGame._id,{action:"Player_Connect"});
-                callback(err);
-            },5000)
-                
-                
-            
+        function (callback) {
+            // We give a chance for the client to oad the new data
+            // and then we are set to unleash the bot.
+            setTimeout(function () {
+                SocketServer.botSubscribe(openGame._id, oldPlayer);
+                callback();
+            }, 5000)
         },
     ], function (err, game) {
-        // if (!err)
-        //     game.save(function (err, result) {
-        //         return cb(err, game);
-        //     })
-        // else
-        //     return cb(err, null);
-        console.log(err);
-        console.log(game);
+        if (err)
+            console.log(err);
     })
 }
 
@@ -156,7 +159,7 @@ GameServer.fetchGameOfType = function (game_type, user, callback) {
     if (game_type.room_size == 1) {
         createNewGame();
     } else {
-        Game.findOne({ type: game_type.name, status: 0 })
+        Game.findOne({ type: game_type.name, status: 0 , "players._id": { $ne: user._id }})
             .sort({ field: 'asc', _id: -1 })
             .limit(1)
             .exec(function (err, activeGame) {
@@ -189,6 +192,15 @@ GameServer.fetchGameOfType = function (game_type, user, callback) {
         // return to the next waterfall method
         callback(null, game);
     }
+}
+
+// Sets the game to
+GameServer.setMatchStatusTo = function (roomid, status) {
+    var statuses = { "0": "open", "1": "active", "2": "closed", "3": "canceled" };
+    Game.findByIdAndUpdate(roomid, { $set: { status: status } }, function (err, game) {
+        if (err) return console.log("[error] " + err);
+        console.log("GameServer: Game [" + roomid + "] has become [" + status + "] " + statuses[status] + ".");
+    });
 }
 /**
  * If needed this method will populate the Game object with 
@@ -270,12 +282,14 @@ GameServer.initSocketsServer = function (wss) {
                 case "Subscribe":
                     var room = SocketServer.getRoom(action.room);
                     if (room && room.size > 0) {
-                        SocketServer.roomBroadcast(room.sockets, { message: "A new user has connected" });
-                        room.sockets.push(ws);
                         room.size--;
+                        // Inform the socket about the user that has connected;
+                        SocketServer.roomBroadcast(room.id, "Player_Connect", action.player);
+                        room.sockets.push(ws);
+                        
                         if (room.size == 0) {
-                            SocketServer.socketsBroadcast(room.sockets, { action: "Game_Start" });
-                            GameServer.setMatchToActive(room.id);
+                            SocketServer.roomBroadcast(room.id, "Game_Start");
+                            GameServer.setMatchStatusTo(room.id, 1);
                             clearTimeout(room.timer);
                         }
                     } else {
@@ -292,14 +306,53 @@ GameServer.initSocketsServer = function (wss) {
         // ws.csend('something');
     });
 
-    SocketServer.botSubscribe = function(){
-        
+    SocketServer.botSubscribe = function (roomid, player) {
+        var room = SocketServer.getRoom(roomid);
+        if (room && room.size > 0) {            
+            // decrement the room size  
+            room.size--;
+            // Inform the socket about the user that has connected;
+            SocketServer.roomBroadcast(room.id, "Player_Connect", player);
+            // if we are filled start the game
+            if (room.size == 0) {
+                SocketServer.roomBroadcast(room.id, "Game_Start");
+            }
+        }
     }
 
-    SocketServer.socketsBroadcast = function (sockets, data) {
-        _.each(sockets, function (socket) {
+    /**
+     * Socket Client Actions
+     * Game_Start: Tell the client to start the game. (data:null)
+     * Reload_Game: Tell the client to reload the game data. (data: <game_id>)
+     * Player_Connect: Inform the client that a new user conencted. (data:{size: <room_size>, player: <player_data>)
+     * Room_Closed: Inform the user that the room has closed and is now unsubscribed. (data: <room_id>)
+     */
+    SocketServer.roomBroadcast = function (room_id, action, extraData) {
+        var room = SocketServer.getRoom(room_id);
+        if (!room) return;
+
+        var message = { action: action };
+
+        switch (action) {
+            case "Game_Start":
+                message.data = null;
+                break;
+            case "Reload_Game":
+                message.data = room_id;
+                break;
+            case "Player_Connect":
+                message.data = { size: room.size, player: extraData };
+                break;
+            case "Room_closed":
+                message.data = room_id;
+                break;
+        }
+
+        console.log(message);
+
+        _.each(room.sockets, function (socket) {
             if (socket.readyState === WebSocket.OPEN) {
-                socket.send(data);
+                socket.send(message);
             }
         })
     }
@@ -343,7 +396,7 @@ GameServer.initSocketsServer = function (wss) {
     SocketServer.closeRoom = function (roomid) {
         var room = SocketServer.getRoom(roomid);
         console.log("Closing Room: " + room.id);
-        SocketServer.socketsBroadcast(room.sockets, { action: "Room_Closed" });
+        SocketServer.roomBroadcast(room.sockets, "Room_Closed");
         clearTimeout(room.timer);
         _.pull(SocketServer.rooms, room);
         console.log(SocketServer.rooms.length);
