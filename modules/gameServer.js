@@ -276,15 +276,24 @@ GameServer.initSocketsServer = function (wss) {
 
         ws.on('message', function incoming(message) {
             console.log('received: %s', message);
-            var action = JSON.parse(message);
+            var action;
+            
+            try{
+                action = JSON.parse(message);
+            }catch(er){
+                action = message;                
+            }
+            
+            // console.log(action.type);
 
             switch (action.type) {
                 case "Subscribe":
-                    var room = SocketServer.getRoom(action.room);
+                console.log("Action from client to subscribe");
+                    var room = SocketServer.getRoom(action.data.room);
                     if (room && room.size > 0) {
                         room.size--;
                         // Inform the socket about the user that has connected;
-                        SocketServer.roomBroadcast(room.id, "Player_Connect", action.player);
+                        SocketServer.roomBroadcast(room.id, "Player_Connect", action.data.player);
                         room.sockets.push(ws);
                         
                         if (room.size == 0) {
@@ -377,7 +386,9 @@ GameServer.initSocketsServer = function (wss) {
     }
 
     SocketServer.getRoom = function (roomid) {
-        return _.find(SocketServer.rooms, { id: roomid });
+        console.log("Requested to fetch room:" + roomid);
+        var room = _.find(SocketServer.rooms, { id: roomid });
+        return room;
     }
 
     SocketServer.createRoom = function (roomid, roomsize) {
@@ -389,7 +400,7 @@ GameServer.initSocketsServer = function (wss) {
                 GameServer.createHead2HeadBotGame(this.id);
             }
         };
-        room.timer = setTimeout(room.noUserConnected.bind(room), 10000);
+        room.timer = setTimeout(room.noUserConnected.bind(room), 30000);
         SocketServer.rooms.push(room);
     }
 
