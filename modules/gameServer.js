@@ -51,6 +51,13 @@ GameServer.createNewGame = function (user_id, game_type_name, dyno_name, cb) {
         // Populate Questions
         GameServer.populateGameQuestions,
     ], function (err, game) {
+
+        // Add the player to the players list. In every other game type other than solo
+        // this happens in from the sockets.
+        game.players.push(GameServer.transformToMiniUser(requestUser));
+        // Update the available slots left for the game
+        game.slotsLeft = game.configuration.room_size - game.players.length;
+
         if (!err)
             game.save(function (err, result) {
                 return cb(err, game);
@@ -86,7 +93,7 @@ GameServer.createHead2HeadBotGame = function (game_id) {
         function (callback) {
             // We find one random game of Head2Head which has ended and the player has not participated
             Game.findOneRandom({ type: "head2head", status: 2, "players._id": { $ne: openGame.players[0]._id } }, {}, { limit: 1 }, function (err, result) {
-                 console.log("1. Get a previous head 2 head and multiplex questions and answer of one of the users");
+                console.log("1. Get a previous head 2 head and multiplex questions and answer of one of the users");
                 oldGame = result;
                 // We make the additions needed to the open game from the old one
                 openGame.questions = oldGame.questions;
@@ -95,6 +102,8 @@ GameServer.createHead2HeadBotGame = function (game_id) {
                 openGame.status = 1;
                 oldPlayer = oldGame.players[Math.floor(Math.random() * oldGame.players.length)];
                 openGame.players.push(oldPlayer);
+                // Update the available slots left for the game
+                openGame.slotsLeft = openGame.configuration.room_size - openGame.players.length;
                 // openGame.markModified('players');
                 callback(err);
             });
@@ -104,7 +113,7 @@ GameServer.createHead2HeadBotGame = function (game_id) {
             console.log("2. Inform the user through sockets to update the game object");
             openGame.save(function (err, result) {
                 // After we update the Open Game we inform the user client that it has to reload the game data because the questions have changed
-                SocketServer.roomBroadcast(openGame._id, "Reload_Game");
+                SocketServer.roomBroadcast(openGame._id.toString(), "Reload_Game");
                 callback(err);
             })
         },
@@ -112,7 +121,7 @@ GameServer.createHead2HeadBotGame = function (game_id) {
             // We give a chance for the client to oad the new data
             // and then we are set to unleash the bot.
             setTimeout(function () {
-                SocketServer.botSubscribe(openGame._id, oldPlayer);
+                SocketServer.botSubscribe(openGame._id.toString(), oldPlayer);
                 callback();
             }, 5000)
         },
@@ -159,7 +168,7 @@ GameServer.fetchGameOfType = function (game_type, user, callback) {
     if (game_type.room_size == 1) {
         createNewGame();
     } else {
-        Game.findOne({ type: game_type.name, status: 0 , "players._id": { $ne: user._id }})
+        Game.findOne({ type: game_type.name, status: 0, "players._id": { $ne: user._id } })
             .sort({ field: 'asc', _id: -1 })
             .limit(1)
             .exec(function (err, activeGame) {
@@ -175,19 +184,15 @@ GameServer.fetchGameOfType = function (game_type, user, callback) {
         game = new Game();
         // Add the game type name as type of the game
         game.type = game_type.name;
-        // Add the player to the players list. In every other game type other than solo
-        // this happens in from the sockets.
-        game.players.push(GameServer.transformToMiniUser(user));
         // Assign the congifuration for the client
         game.configuration = game_type;
-        // Update the available slots left for the game
-        game.slotsLeft = game.configuration.room_size - game.players.length;
         // If the game is not competative set to active
-        if (game.configuration.room_size == 1)
+        if (game.configuration.room_size == 1) {
             game.status = 1;
+        }
         // Create a socket room
         else {
-            SocketServer.createRoom(game._id, game.configuration.room_size);
+            SocketServer.createRoom(game._id.toString(), game.configuration.room_size);
         }
         // return to the next waterfall method
         callback(null, game);
@@ -277,25 +282,25 @@ GameServer.initSocketsServer = function (wss) {
         ws.on('message', function incoming(message) {
             console.log('received: %s', message);
             var action;
-            
-            try{
+
+            try {
                 action = JSON.parse(message);
-            }catch(er){
-                action = message;                
+            } catch (er) {
+                action = message;
             }
-            
+
             // console.log(action.type);
 
             switch (action.type) {
                 case "Subscribe":
-                console.log("Action from client to subscribe");
-                    var room = SocketServer.getRoom(action.data.room);
+                    console.log("Action from client to subscribe");
+                    var room = SocketServer.getRoom(action.data.game);
                     if (room && room.size > 0) {
                         room.size--;
                         // Inform the socket about the user that has connected;
                         SocketServer.roomBroadcast(room.id, "Player_Connect", action.data.player);
                         room.sockets.push(ws);
-                        
+
                         if (room.size == 0) {
                             SocketServer.roomBroadcast(room.id, "Game_Start");
                             GameServer.setMatchStatusTo(room.id, 1);
@@ -312,12 +317,13 @@ GameServer.initSocketsServer = function (wss) {
         });
 
         // SocketServer.broadcast("lobby", null, "Hello Lobby");
-        // ws.csend('something');
+        ws.send(JSON.stringify({"action":"Welcome","data":{"message":'Welcome to the Grand Bazaar Lobby'}}));
     });
 
     SocketServer.botSubscribe = function (roomid, player) {
         var room = SocketServer.getRoom(roomid);
-        if (room && room.size > 0) {            
+        console.log("Bot subscribing");
+        if (room && room.size > 0) {
             // decrement the room size  
             room.size--;
             // Inform the socket about the user that has connected;
@@ -340,28 +346,29 @@ GameServer.initSocketsServer = function (wss) {
         var room = SocketServer.getRoom(room_id);
         if (!room) return;
 
-        var message = { action: action };
+        var message = { action: action, data: null };
 
         switch (action) {
             case "Game_Start":
-                message.data = null;
+                message.data = { game: room_id };
                 break;
             case "Reload_Game":
-                message.data = room_id;
+                message.data = { game: room_id };
                 break;
             case "Player_Connect":
-                message.data = { size: room.size, player: extraData };
+                message.data = { game: room_id, size: room.size, player: extraData };
                 break;
             case "Room_closed":
-                message.data = room_id;
+                message.data = { game: room_id };
                 break;
         }
 
-        console.log(message);
+        console.log("Sending SocketAction: " + message.action);
 
         _.each(room.sockets, function (socket) {
+
             if (socket.readyState === WebSocket.OPEN) {
-                socket.send(message);
+                socket.send(JSON.stringify(message));
             }
         })
     }
